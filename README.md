@@ -1,4 +1,3 @@
-# front_to_bev_gen
 # CoherentBEVGen: Temporally Consistent Multi-View BEV Generation from Single Front View using Conditional Diffusion
 
 This repository contains the codebase for our AAAI 2025 project: generating temporally coherent multi-view BEV representations from monocular front-view images via memory-augmented conditional diffusion. Our goal is to simulate rare long-tail driving scenarios from limited input to support robust motion planning in simulators like `highway-env`.
