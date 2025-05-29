@@ -53,19 +53,20 @@ def save_bev_tensors(version,
             post_trans = post_trans.to(device)
 
             out = model(imgs, rots, trans, intrins, post_rots, post_trans)
+            print(out.shape)
             bev_feat = out.squeeze(0).cpu()
-            bev_np = bev_feat.mean(dim=0).numpy()
-            bev_norm = (bev_np - bev_np.min()) / (bev_np.max() - bev_np.min() + 1e-5)
-
-            import matplotlib.pyplot as plt
-            plt.figure(figsize=(6, 6))
-            plt.imshow(bev_norm, cmap='inferno')
-            plt.axis('off')
-            plt.tight_layout()
-            plt.savefig(f'../imgs/bev_vis_{cnt:04d}.png')
-            plt.close()
+            # bev_np = bev_feat.mean(dim=0).numpy()
+            # bev_norm = (bev_np - bev_np.min()) / (bev_np.max() - bev_np.min() + 1e-5)
+            #
+            # import matplotlib.pyplot as plt
+            # plt.figure(figsize=(6, 6))
+            # plt.imshow(bev_norm, cmap='inferno')
+            # plt.axis('off')
+            # plt.tight_layout()
+            # plt.savefig(f'../imgs/bev_vis_{cnt:04d}.png')
+            # plt.close()
             torch.save(bev_feat, os.path.join(output_folder, f'bev_{cnt:04d}.pt'))
-            print(f'Saved: bev_{cnt:04d}.pt + bev_vis_{cnt:04d}.png')
+            print(f'Saved: bev_{cnt:04d}.pt ')
 
             cnt += 1
 
