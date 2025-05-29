@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+from tqdm.auto import tqdm
 
 data_dir = "../bev_tensors"
 
@@ -15,7 +16,7 @@ Hyperparameters
 """
 timestamp = utils.readable_timestamp()
 parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_updates", type=int, default=5000)
+parser.add_argument("--n_updates", type=int, default=10000)
 parser.add_argument("--n_hiddens", type=int, default=128)
 parser.add_argument("--n_residual_hiddens", type=int, default=32)
 parser.add_argument("--n_residual_layers", type=int, default=2)
@@ -75,43 +76,57 @@ def evaluate(model, val_loader):
             recon_losses.append(recon_loss.item())
             kl_losses.append(kl_loss.item())
     model.train()
-    print(f'[VAL] Recon: {np.mean(recon_losses):.2f} | KL: {np.mean(kl_losses):.2f}')
 
 
 def train():
     update_count = 0
+    pbar = tqdm(total=args.n_updates, desc="Training", unit="it")  # 创建总进度条
+
     while update_count < args.n_updates:
         for x in training_loader:
             x = x.to(device)
-            assert x.shape == (1, 3, 200, 200), f"Unexpected shape: {x.shape}"
-            return x.squeeze(0)
-
             optimizer.zero_grad()
+
             x_hat, mu, logvar = model(x)
             loss, recon_loss, kl_loss = vae_loss(x_hat, x, mu, logvar)
 
             loss.backward()
             optimizer.step()
 
+            # 记录
             results["recon_errors"].append(recon_loss.item())
             results["loss_vals"].append(loss.item())
             results["n_updates"] = update_count
 
+            # 更新进度条并加上当前 loss 信息
+            pbar.update(1)
+            pbar.set_postfix({
+                "recon": f"{recon_loss.item():.2f}",
+                "kl":    f"{kl_loss.item():.2f}",
+                "total": f"{loss.item():.2f}"
+            })
+
+            # 按原逻辑定期保存 & 打 log
             if update_count % args.log_interval == 0:
                 if args.save:
                     hyperparameters = args.__dict__
                     utils.save_model_and_results(
                         model, results, hyperparameters, args.filename)
-
                 print(
-                    f'Update #{update_count:05d} | Recon Error: {recon_loss.item():.2f} | KL: {kl_loss.item():.2f} | Total Loss: {loss.item():.2f}')
+                    f'Update #{update_count:05d} | Recon Error: {recon_loss.item():.2f} '
+                    f'| KL: {kl_loss.item():.2f} | Total Loss: {loss.item():.2f}'
+                )
 
             update_count += 1
+
+            # 定期做验证
             if update_count % (args.log_interval * 5) == 0:
                 evaluate(model, validation_loader)
 
             if update_count >= args.n_updates:
                 break
+
+    pbar.close()
 
 
 if __name__ == "__main__":

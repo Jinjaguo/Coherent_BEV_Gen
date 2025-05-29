@@ -3,22 +3,27 @@ import time
 import torch
 from torch.utils.data import Dataset
 
+import os
+import torch
+from torch.utils.data import Dataset
+
 
 class TensorDataset(Dataset):
-    def __init__(self, pt_dir, transform=None):
-        self.pt_dir = pt_dir
-        self.file_names = sorted([f for f in os.listdir(pt_dir) if f.endswith('.pt')])
-        self.transform = transform
+    def __init__(self, pt_dir):
+        self.files = sorted(
+            [os.path.join(pt_dir, f) for f in os.listdir(pt_dir) if f.endswith('.pt')]
+        )
 
     def __len__(self):
-        return len(self.file_names)
+        return len(self.files)
 
     def __getitem__(self, idx):
-        file_path = os.path.join(self.pt_dir, self.file_names[idx])
-        tensor = torch.load(file_path)  # 应该是 [1, 3, 200, 200]
-        if self.transform:
-            tensor = self.transform(tensor)
-        return tensor.squeeze(0)  # 变成 [3, 200, 200]
+        x = torch.load(self.files[idx], map_location="cpu")  # ✅ 使用 self.files
+        if x.ndim == 2:
+            x = x.unsqueeze(0)  # [200, 200] → [1, 200, 200]
+        elif x.shape[0] != 1:
+            raise ValueError(f"Unexpected channel size: {x.shape}")
+        return x.float()
 
 
 def readable_timestamp():

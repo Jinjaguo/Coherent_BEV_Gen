@@ -8,7 +8,7 @@ from .decoder import Decoder
 class VAE(nn.Module):
     def __init__(self, h_dim, res_h_dim, n_res_layers, latent_dim):
         super(VAE, self).__init__()
-        self.encoder = Encoder(3, h_dim, res_h_dim, n_res_layers, latent_dim)
+        self.encoder = Encoder(1, h_dim, res_h_dim, n_res_layers, latent_dim)
         self.decoder = Decoder(latent_dim, h_dim, n_res_layers, res_h_dim)
 
     def reparameterize(self, mu, logvar):
