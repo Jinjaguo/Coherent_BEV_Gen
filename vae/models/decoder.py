@@ -37,4 +37,4 @@ class Decoder(nn.Module):
         x = self.fc(z)                                  # [B, h_dim*49*49]
         x = x.view(-1, self.h_dim, self.init_hw, self.init_hw)  # [B, h_dim, 49, 49]
         x = self.inverse_conv_stack(x)                  # [B, 3, 200, 200]
-        return x
+        return torch.sigmoid(x)
