@@ -19,8 +19,8 @@ Hyperparameters
 """
 timestamp = utils.readable_timestamp()
 parser.add_argument("--batch_size", type=int, default=64)
-parser.add_argument("--n_updates", type=int, default=2000)
-parser.add_argument("--n_hiddens", type=int, default=96)
+parser.add_argument("--n_updates", type=int, default=10000)
+parser.add_argument("--n_hiddens", type=int, default=128)
 parser.add_argument("--n_residual_hiddens", type=int, default=32)
 parser.add_argument("--n_residual_layers", type=int, default=2)
 parser.add_argument("--latent_dim", type=int, default=16)
@@ -28,9 +28,7 @@ parser.add_argument("--learning_rate", type=float, default=1e-4)
 parser.add_argument("--log_interval", type=int, default=50)
 parser.add_argument("-save", action="store_true")
 parser.add_argument("--filename", type=str, default=timestamp)
-# 新增一个参数，用来指定 TensorBoard 记录的子目录名（可选）
-parser.add_argument("--tb_subdir", type=str, default=None,
-                    help="TensorBoard 日志写入的子目录，默认使用 'runs' 目录下自动生成的名字")
+parser.add_argument("--tb_subdir", type=str, default=None)
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -63,13 +61,13 @@ results = {
     'loss_vals': [],
 }
 
-# VAE 损失函数
+
 def vae_loss(x_hat, x, mu, logvar, beta=10.0):
     recon_loss = F.mse_loss(x_hat, x, reduction='mean')
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.size(0)
     return recon_loss + beta * kl_loss, recon_loss, kl_loss
 
-# 修改 evaluate 函数：返回验证集上的平均重构误差和平均 kl
+
 def evaluate(model, val_loader):
     model.eval()
     total_recon, total_kl, n_samples = 0.0, 0.0, 0
@@ -82,22 +80,18 @@ def evaluate(model, val_loader):
             total_kl += kl_loss.item()
             n_samples += x.size(0)
     model.train()
-    # 返回平均值（注意：如果 reduction='sum'，这里除以样本数）
     avg_recon = total_recon / n_samples
     avg_kl = total_kl / n_samples
     return avg_recon, avg_kl
 
 def train():
     update_count = 0
-    # 2. 初始化 TensorBoard 的 SummaryWriter
     if args.tb_subdir:
-        # 如果用户指定了子目录，就写到 runs/{tb_subdir}
         writer = SummaryWriter(log_dir=f"runs/{args.tb_subdir}")
     else:
-        # 否则使用默认的 runs/ 日期+时间 目录
         writer = SummaryWriter()
 
-    pbar = tqdm(total=args.n_updates, desc="Training", unit="it")  # 创建总进度条
+    pbar = tqdm(total=args.n_updates, desc="Training", unit="it")
 
 
     while update_count < args.n_updates:
@@ -112,18 +106,14 @@ def train():
             loss.backward()
             optimizer.step()
 
-            # 记录
             results["recon_errors"].append(recon_loss.item())
             results["loss_vals"].append(loss.item())
             results["n_updates"] = update_count
 
-            # 3. 每次迭代都向 TensorBoard 写入标量信息
-            #    这里将 total loss, recon loss, kl loss 都写进去，step 用 update_count
             writer.add_scalar("Train/TotalLoss", loss.item(), update_count)
             writer.add_scalar("Train/ReconstructionLoss", recon_loss.item(), update_count)
             writer.add_scalar("Train/KLDiv", kl_loss.item(), update_count)
 
-            # 更新进度条并加上当前 loss 信息
             pbar.update(1)
             pbar.set_postfix({
                 "recon": f"{recon_loss.item():.2f}",
@@ -131,7 +121,6 @@ def train():
                 "total": f"{loss.item():.2f}"
             })
 
-            # 按原逻辑定期保存 & 打 log
             if update_count % args.log_interval == 0:
                 if args.save:
                     hyperparameters = args.__dict__
@@ -148,24 +137,20 @@ def train():
                 torch.save(model.encoder.state_dict(), f"./results/encoder/vae_encoder_step{update_count}.pth")
                 torch.save(model.decoder.state_dict(), f"./results/decoder/vae_decoder_step{update_count}.pth")
 
-            # 4. 定期做验证，并将验证 loss 写入 TensorBoard
             if update_count % (args.log_interval * 5) == 0:
                 avg_recon_val, avg_kl_val = evaluate(model, validation_loader)
-                # 将验证集上的平均 loss 写到 TensorBoard
                 writer.add_scalar("Val/ReconstructionLoss", avg_recon_val, update_count)
                 writer.add_scalar("Val/KLDiv", avg_kl_val, update_count)
                 writer.add_scalar("Val/TotalLoss", avg_recon_val + avg_kl_val, update_count)
                 print(f'验证集 | Recon Error: {avg_recon_val:.4f} | KL: {avg_kl_val:.4f} | Total: {avg_recon_val+avg_kl_val:.4f}')
 
             if update_count >= args.n_updates:
-                # 最后一轮保存最终模型
                 torch.save(model.encoder.state_dict(), "./results/encoder/vae_encoder_final.pth")
                 torch.save(model.decoder.state_dict(), "./results/decoder/vae_decoder_final.pth")
 
                 break
 
     pbar.close()
-    # 5. 关闭 SummaryWriter
     writer.close()
 
 if __name__ == "__main__":
